@@ -1,9 +1,10 @@
 [package]
 name = "check-engine"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 atty = "0.2.14"
 clap = { version = "4.5.26", features = ["derive"] }
 hickory-resolver = "0.24.2"
+ignore = "0.4.23"

@@ -13,6 +13,8 @@ use hickory_resolver::{
 struct Args {
 	#[arg(short, long)]
 	r#loop: bool,
+	#[arg(short, long)]
+	path: String
 }
 
 fn check_engine(err: &str) {
@@ -31,18 +33,41 @@ fn main() {
 	if args.r#loop {
 		std::thread::sleep(std::time::Duration::from_secs(5));
 		loop {
-			run_checks();
+			run_checks(&args);
 
 			// Sleep for 5 seconds
 			std::thread::sleep(std::time::Duration::from_secs(5));
 		}
 	} else {
-		run_checks();
+		run_checks(&args);
 	}
 }
 
-fn run_checks() {
-	dns_check();
+fn run_checks(args: &Args) {
+	// Get all files in the path directory recursively
+	let walker = ignore::WalkBuilder::new(&args.path).hidden(false).build();
+	let files = walker.filter_map(Result::ok).filter(|entry| entry.metadata().unwrap().is_file()).collect::<Vec<_>>();
+	if files.is_empty() {
+		check_engine("No checks found");
+		return;
+	}
+
+	for entry in files {
+		// Execute the check and read the output + exit code
+		let output = std::process::Command::new(entry.path()).output();
+		if output.is_err() {
+			check_engine(&format!("Check {} failed to execute: {}\n", entry.path().display(), output.err().unwrap()));
+			continue;
+		}
+		let output = output.unwrap();
+		let stdout = String::from_utf8_lossy(&output.stdout);
+		let stderr = String::from_utf8_lossy(&output.stderr);
+		let exit_code = output.status.code().unwrap();
+
+		if exit_code != 0 {
+			check_engine(&format!("Check {} failed with exit code {}:\n{}\n{}\n", entry.path().display(), exit_code, stdout, stderr));
+		}
+	}
 }
 
 fn dns_check() {
